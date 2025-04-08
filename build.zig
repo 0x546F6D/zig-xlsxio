@@ -1,128 +1,112 @@
 const std = @import("std");
 
-const dlls = [_][]const u8{
-    "vendor/xlsxio/bin/xlsxio_read.dll",
-    "vendor/xlsxio/bin/xlsxio_write.dll",
-    "vendor/xlsxio/bin/libexpat.dll",
-    "vendor/xlsxio/bin/minizip.dll",
-    "vendor/xlsxio/bin/zlib1.dll",
-    "vendor/xlsxio/bin/bz2.dll",
+const include_spath = "vendor/include";
+const lib_spath = "vendor/lib";
+const bin_spath = "vendor/bin";
+
+const xlsxio_dlls = [_][]const u8{
+    "libxlsxio_read",
+    "libxlsxio_write",
 };
 
-/// Helper function for consumers to install necessary DLLs.
-pub fn installDlls(b: *std.Build, artifact: *std.Build.Step.Compile) void {
-    for (dlls) |dll_path| {
-        const dll_basename = std.fs.path.basename(dll_path);
-        b.installFile(dll_path, dll_basename);
-    }
-    if (artifact.kind == .exe) {
-        const run_cmd = b.addRunArtifact(artifact);
-        run_cmd.addPathDir("bin");
-    }
-}
+const static_dep_dlls = [_][]const u8{
+    lib_spath ++ "/libexpat.a",
+    lib_spath ++ "/libminizip.a",
+    lib_spath ++ "/libz.a",
+    lib_spath ++ "/libbz2.a",
+};
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
     // Expose an option "install_dlls" (default true)
-    const install_dlls_opt = b.option(bool, "install_dlls", "Install DLLs") orelse true;
+    const link_static = b.option(bool, "link_static", "link xlsxio library statically {default: false)") orelse false;
+    const read_only = b.option(bool, "read_only", "Only include the read library (default: false)") orelse false;
 
     // Define the xlsxio module.
     const xlsxio_mod = b.addModule("xlsxio", .{
         .root_source_file = b.path("src/xlsxio.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
-    // Add the include path so that @cImport finds xlsxio_read.h
-    xlsxio_mod.addIncludePath(b.path("vendor/xlsxio/include"));
+    // Add include path for @cImport
+    xlsxio_mod.addIncludePath(b.path(include_spath));
+    // Add dlls path if necessary
+    if (!link_static) xlsxio_mod.addLibraryPath(b.path(bin_spath));
 
-    // Add the build helper module.
-    _ = b.addModule("xlsxio_build", .{
-        .root_source_file = b.path("src/build_module.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
-    // Create a shared library that consumers can link against.
-    const lib = b.addStaticLibrary(.{
-        .name = "zig_xlsxio",
-        .root_source_file = b.path("src/xlsxio.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    const xlsxio_include = b.path("vendor/xlsxio/include");
-    const xlsxio_lib = b.path("vendor/xlsxio/lib");
-    lib.addIncludePath(xlsxio_include);
-    lib.addLibraryPath(xlsxio_lib);
-    lib.addObjectFile(b.path("vendor/xlsxio/lib/xlsxio_read.lib"));
-    lib.addObjectFile(b.path("vendor/xlsxio/lib/xlsxio_write.lib"));
-    lib.linkLibC();
-
-    // Conditionally install DLLs if the option is true.
-    if (install_dlls_opt) {
-        for (dlls) |dll_path| {
-            const dll_basename = std.fs.path.basename(dll_path);
-            b.installFile(dll_path, dll_basename);
+    // add static/import libraries depending on static/dynamic linking
+    if (link_static) {
+        // add static libraries
+        if (read_only)
+            xlsxio_mod.addObjectFile(b.path(lib_spath ++ "/" ++ xlsxio_dlls[0] ++ ".a"))
+        else inline for (xlsxio_dlls) |dll_name|
+            xlsxio_mod.addObjectFile(b.path(lib_spath ++ "/" ++ dll_name ++ ".a"));
+        // add dependencies static libs
+        inline for (static_dep_dlls) |dll_path|
+            xlsxio_mod.addObjectFile(b.path(dll_path));
+    } else {
+        // add import library, link to dynamic library
+        if (read_only) {
+            xlsxio_mod.addObjectFile(b.path(lib_spath ++ "/" ++ xlsxio_dlls[0] ++ ".dll.a"));
+            xlsxio_mod.linkSystemLibrary(xlsxio_dlls[0], .{});
+        } else inline for (xlsxio_dlls) |dll_name| {
+            xlsxio_mod.addObjectFile(b.path(lib_spath ++ "/" ++ dll_name ++ ".dll.a"));
+            xlsxio_mod.linkSystemLibrary(dll_name, .{});
         }
     }
+}
 
-    b.installArtifact(lib);
+/// copy Xlsxio dynamic libraries to zig-out/bin
+pub fn copyXlsxioDlls(
+    b: *std.Build,
+    dep: *std.Build.Dependency,
+) void {
+    const xlsxio_lib_path = getLibPath(b, dep);
 
-    const options = b.addOptions();
-    options.addOption([]const u8, "include_path", "vendor/xlsxio/include");
-    options.addOption([]const u8, "lib_path", "vendor/xlsxio/lib");
-    options.addOption([]const []const u8, "system_libs", &[_][]const u8{ "xlsxio_read", "xlsxio_write" });
-    options.addOption(bool, "link_libc", true);
+    // Check if xlsxio is linked statically or dynamically
+    if (dep.builder.user_input_options.get("link_static")) |link_static|
+        if (link_static.value.scalar[0] == 't') {
+            std.debug.print("xlsxio is linked statically, no need to copy the dynamic dlls to the bin directory\n", .{});
+            return;
+        };
 
-    // Create a test artifact.
-    const tests = b.addTest(.{
-        .root_source_file = b.path("src/xlsxio.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    tests.addIncludePath(xlsxio_include);
-    tests.addLibraryPath(xlsxio_lib);
-    tests.linkSystemLibrary("xlsxio_read");
-    tests.linkSystemLibrary("xlsxio_write");
-    tests.linkLibC();
+    // Check if read_only was requested by user;
+    const user_read_only = if (dep.builder.user_input_options.get("read_only")) |read_only|
+        if (read_only.value.scalar[0] == 't') true else false
+    else
+        false;
 
-    const run_tests = b.addRunArtifact(tests);
-    run_tests.addPathDir("vendor/xlsxio/bin");
-
-    const test_step = b.step("test", "Run library tests");
-    test_step.dependOn(&run_tests.step);
-
-    // Create a demo executable to show usage.
-    const exe = b.addExecutable(.{
-        .name = "xlsxio_demo",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    exe.addIncludePath(xlsxio_include);
-    exe.addLibraryPath(xlsxio_lib);
-    exe.linkSystemLibrary("xlsxio_read");
-    exe.linkSystemLibrary("xlsxio_write");
-    exe.linkLibC();
-    exe.root_module.addImport("xlsxio", xlsxio_mod);
-    b.installArtifact(exe);
-
-    const run_cmd = b.addRunArtifact(exe);
-    run_cmd.addPathDir("vendor/xlsxio/bin");
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
+    // copy dynamic dlls to build zig-out/bin directory
+    if (user_read_only) {
+        const dll_file = std.mem.concat(b.allocator, u8, &.{ xlsxio_dlls[0], ".dll" }) catch xlsxio_dlls[0];
+        b.installBinFile(b.pathJoin(&.{ xlsxio_lib_path, dll_file }), dll_file);
+    } else for (xlsxio_dlls) |dll_name| {
+        const dll_file = std.mem.concat(b.allocator, u8, &.{ dll_name, ".dll" }) catch dll_name;
+        b.installBinFile(b.pathJoin(&.{ xlsxio_lib_path, dll_file }), dll_file);
     }
-    const run_step = b.step("run", "Run the demo application");
-    run_step.dependOn(&run_cmd.step);
+}
 
-    // Optionally add a step to install DLLs only.
-    if (install_dlls_opt) {
-        const install_dlls_step = b.step("install-dlls", "Install DLLs only");
-        for (dlls) |dll_path| {
-            const dll_basename = std.fs.path.basename(dll_path);
-            const install_file_step = b.addInstallFile(b.path(dll_path), dll_basename);
-            install_dlls_step.dependOn(&install_file_step.step);
-        }
-    }
+/// Add Xlsxio dynamic libraries path to Run command
+pub fn addRunPath(
+    b: *std.Build,
+    dep: *std.Build.Dependency,
+    run: *std.Build.Step.Run,
+) void {
+    const xlsxio_lib_path = getLibPath(b, dep);
+    run.addPathDir(xlsxio_lib_path);
+}
+
+/// get xlsxio libraries path relative to build directory
+fn getLibPath(
+    b: *std.Build,
+    dep: *std.Build.Dependency,
+) []u8 {
+    const build_root_path = if (b.build_root.path) |path|
+        path
+    else
+        std.fs.cwd().realpathAlloc(b.allocator, ".") catch unreachable;
+    const rel_path = std.fs.path.relative(b.allocator, build_root_path, dep.builder.pathFromRoot(".")) catch ".";
+    return b.pathJoin(&.{ rel_path, "vendor/bin" });
 }

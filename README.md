@@ -15,18 +15,24 @@ A Zig wrapper for [xlsxio](https://github.com/brechtsanders/xlsxio), a library f
 - Zig 0.14.0 or later
 - **Windows 64-bit only** (currently)
 
+## Libraries used
+
+- [XLSX I/O version 0.2.35](https://github.com/brechtsanders/xlsxio/releases/tag/0.2.35) for both dynamic.dll and static.a libraries
+- [mingw-w64-x86_64-expat 2.7.1](https://packages.msys2.org/packages/mingw-w64-x86_64-expat) for libexpat.a
+- [mingw-w64-x86_64-minizip 1.3.1](https://packages.msys2.org/packages/mingw-w64-x86_64-minizip) for libminizip.a
+- [mingw-w64-x86_64-zlib 1.3.1](https://packages.msys2.org/packages/mingw-w64-x86_64-zlib) for libz.a
+- [mingw-w64-x86_64-bzip2 1.0.8](https://packages.msys2.org/packages/mingw-w64-x86_64-bzip2) for libbz2.a
+
 ## Installation
 
 ### Using Zig Package Manager
 
 ```bash
 # Add to your project
-zig fetch --save git+https://github.com/yourusername/zig-xlsxio
+zig fetch --save git+https://github.com/0x546F6D/zig-xlsxio
 ```
 
-### Usage in build.zig
-
-The simplest way to use this package is:
+### build.zig using helper functions
 
 ```zig
 const std = @import("std");
@@ -42,90 +48,26 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    // Import xlsxio module
     const xlsxio_dep = b.dependency("xlsxio", .{
         .target = target,
         .optimize = optimize,
+        // use only the read library
+        .read_only = true,
+        // link xlsxio statically
+        .link_static = true,
     });
+
     exe.root_module.addImport("xlsxio", xlsxio_dep.module("xlsxio"));
-    
-    // Link with C libraries (required)
-    exe.linkLibC();
-    
-    // Install the artifact
+    // Copy xlsxio dlls to bin directory
+    @import("xlsxio").copyXlsxioDlls(b, xlsxio_dep);
     b.installArtifact(exe);
-    
-    // Simple DLL installation - copies DLLs to bin directory
-    const bin_dir = xlsxio_dep.path("vendor/xlsxio/bin");
-    const dlls = [_][]const u8{
-        "xlsxio_read.dll",
-        "xlsxio_write.dll",
-        "libexpat.dll",
-        "minizip.dll", 
-        "zlib1.dll",
-        "bz2.dll",
-    };
-    
-    for (dlls) |dll| {
-        b.installBinFile(b.pathJoin(&.{bin_dir.getPath(b), dll}), dll);
-    }
-    
-    // Create a run command that includes the bin directory in PATH
+
     const run_cmd = b.addRunArtifact(exe);
-    run_cmd.addPathDir("bin");
-    
+    // Add xlsxio dlls directory to run command
+    @import("xlsxio").addRunPath(b, xlsxio_dep, run_cmd);
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 }
-```
-
-### Using build_module.zig (Easier Alternative)
-
-For an even easier approach, you can use the provided `build_module.zig` helper:
-
-```zig
-const std = @import("std");
-
-pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
-
-    const exe = b.addExecutable(.{
-        .name = "my_app",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
-    // Get the xlsxio dependency
-    const xlsxio_dep = b.dependency("xlsxio", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    
-    // Add the build helper module
-    const build_mod = @import("xlsxio").build_module;
-    
-    // One function handles everything: import, linking, and DLL installation
-    build_mod.linkXlsxioModule(b, exe, xlsxio_dep);
-    
-    b.installArtifact(exe);
-    
-    const run_cmd = b.addRunArtifact(exe);
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
-}
-```
-
-### Manual Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/zig-xlsxio.git
-cd zig-xlsxio
-
-# Build the project
-zig build
 ```
 
 ## Usage
@@ -242,3 +184,4 @@ pub fn main() !void {
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
