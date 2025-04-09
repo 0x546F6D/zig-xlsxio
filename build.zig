@@ -63,14 +63,10 @@ pub fn copyXlsxioDlls(
     b: *std.Build,
     dep: *std.Build.Dependency,
 ) void {
-    const xlsxio_lib_path = getLibPath(b, dep);
-
-    // Check if xlsxio is linked statically or dynamically
-    if (dep.builder.user_input_options.get("link_static")) |link_static|
-        if (link_static.value.scalar[0] == 't') {
-            std.debug.print("xlsxio is linked statically, no need to copy the dynamic dlls to the bin directory\n", .{});
-            return;
-        };
+    const is_xlsxio_lib_path = getLibPath(b, dep);
+    // return if xlsxio is linked statically
+    if (is_xlsxio_lib_path == null) return;
+    const xlsxio_lib_path = is_xlsxio_lib_path.?;
 
     // Check if read_only was requested by user;
     const user_read_only = if (dep.builder.user_input_options.get("read_only")) |read_only|
@@ -94,19 +90,26 @@ pub fn addRunPath(
     dep: *std.Build.Dependency,
     run: *std.Build.Step.Run,
 ) void {
-    const xlsxio_lib_path = getLibPath(b, dep);
-    run.addPathDir(xlsxio_lib_path);
+    // only add path if xlsxio is linked dynamically
+    if (getLibPath(b, dep)) |xlsxio_lib_path| run.addPathDir(xlsxio_lib_path);
 }
 
 /// get xlsxio libraries path relative to build directory
 fn getLibPath(
     b: *std.Build,
     dep: *std.Build.Dependency,
-) []u8 {
+) ?[]u8 {
+    // Check if xlsxio is linked statically or dynamically
+    if (dep.builder.user_input_options.get("link_static")) |link_static|
+        if (link_static.value.scalar[0] == 't') {
+            std.debug.print("xlsxio is linked statically, no need to copy the dynamic dlls or add their path to run cmd\n", .{});
+            return null;
+        };
+
     const build_root_path = if (b.build_root.path) |path|
         path
     else
         std.fs.cwd().realpathAlloc(b.allocator, ".") catch unreachable;
     const rel_path = std.fs.path.relative(b.allocator, build_root_path, dep.builder.pathFromRoot(".")) catch ".";
-    return b.pathJoin(&.{ rel_path, "vendor/bin" });
+    return b.pathJoin(&.{ rel_path, bin_spath });
 }
