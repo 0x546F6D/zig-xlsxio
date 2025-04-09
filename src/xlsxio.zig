@@ -18,6 +18,7 @@ pub const XlsxioError = error{
     SheetNotFound,
     CellNotFound,
     OutOfMemory,
+    SheetListNotOpened,
 };
 
 pub const Reader = struct {
@@ -36,6 +37,28 @@ pub const Reader = struct {
         c.xlsxioread_close(@as(c.xlsxioreader, @ptrCast(@alignCast(self.handle))));
     }
 
+    pub const SheetList = struct {
+        handle: ?*?*c.struct_xlsxio_read_sheetlist_struct,
+        allocator: std.mem.Allocator,
+
+        pub fn init(reader: *Reader) !SheetList {
+            const handle = c.xlsxioread_sheetlist_open(@as(c.xlsxioreader, @ptrCast(@alignCast(reader.handle)))) orelse return XlsxioError.SheetListNotOpened;
+            return SheetList{
+                .handle = @as(?*?*c.struct_xlsxio_read_sheetlist_struct, @ptrCast(@alignCast(handle))),
+                .allocator = reader.allocator,
+            };
+        }
+
+        pub fn deinit(self: *SheetList) void {
+            c.xlsxioread_sheetlist_close(@as(c.xlsxioreadersheetlist, @ptrCast(@alignCast(self.handle))));
+        }
+
+        pub fn next(self: *SheetList) !?[:0]u8 {
+            const value = c.xlsxioread_sheetlist_next(@as(c.xlsxioreadersheetlist, @ptrCast(@alignCast(self.handle)))) orelse return null;
+            return try std.mem.Allocator.dupeZ(self.allocator, u8, std.mem.span(value));
+        }
+    };
+
     pub const Sheet = struct {
         handle: ?*?*c.struct_xlsxio_read_sheet_struct,
         allocator: std.mem.Allocator,
@@ -51,6 +74,14 @@ pub const Reader = struct {
 
         pub fn deinit(self: *Sheet) void {
             c.xlsxioread_sheet_close(@as(c.xlsxioreadersheet, @ptrCast(@alignCast(self.handle))));
+        }
+
+        pub fn lastRow(self: *Sheet) usize {
+            return c.xlsxioread_sheet_last_row_index(@as(c.xlsxioreadersheet, @ptrCast(@alignCast(self.handle))));
+        }
+
+        pub fn lastColumn(self: *Sheet) usize {
+            return c.xlsxioread_sheet_last_column_index(@as(c.xlsxioreadersheet, @ptrCast(@alignCast(self.handle))));
         }
 
         pub fn nextRow(self: *Sheet) bool {

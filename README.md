@@ -63,7 +63,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
-    // Add xlsxio dlls directory to run command
+    // Add xlsxio dlls directory to the run command
     @import("xlsxio").addRunPath(b, xlsxio_dep, run_cmd);
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
@@ -85,6 +85,16 @@ pub fn main() !void {
     var reader = try xlsxio.Reader.init(allocator, "data.xlsx");
     defer reader.deinit();
     
+    // Get list of sheets
+    var sheetlist = try xlsxio.Reader.SheetList.init(&reader);
+    defer sheetlist.deinit();
+
+    // Iterate through sheets
+    while (try sheetlist.next()) |sheet_name| {
+        defer allocator.free(sheet_name); // Don't forget to free the string!
+        std.debug.print("sheet_name: {s}\n", .{sheet_name});
+    }
+
     // Open a sheet (use null for first sheet)
     var sheet = try xlsxio.Reader.Sheet.init(&reader, "Sheet1");
     defer sheet.deinit();
@@ -113,6 +123,12 @@ pub fn main() !void {
             std.debug.print("Date (timestamp): {d}\n", .{d.secs});
         }
     }
+
+    // Get last read row
+    const last_row_idx = sheet.lastRow();
+    // Get last read column
+    const last_col_idx = sheet.lastColumn();
+    std.debug.print("last_row: {}, last_col: {}\n", .{ last_row_idx, last_col_idx });
 }
 ```
 
@@ -184,4 +200,3 @@ pub fn main() !void {
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
-
