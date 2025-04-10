@@ -96,7 +96,7 @@ pub fn main() !void {
     }
 
     // Open a sheet (use null for first sheet)
-    var sheet = try xlsxio.Reader.Sheet.init(&reader, "Sheet1");
+    var sheet = try xlsxio.Reader.Sheet.init(&reader, "Sheet1", xlsxio.SKIP_EMPTY_ROW);
     defer sheet.deinit();
     
     // Iterate through rows
@@ -172,7 +172,10 @@ pub fn main() !void {
 
 - `Reader.init(allocator, filename)` - Open an Excel file for reading
 - `Reader.deinit()` - Close the Excel file
-- `Reader.Sheet.init(reader, sheet_name)` - Open a specific sheet (pass null for first sheet)
+- `Reader.SheetList.init(reader)` - Get the list of sheets in the Excel file
+- `Reader.SheetList.deinit()` - close the list of sheets
+- `Reader.SheetList.next()` - Get the name of the next sheet
+- `Reader.Sheet.init(reader, sheet_name, flags)` - Open a specific sheet (pass null for first sheet, use flags to skip rows/cells)
 - `Reader.Sheet.deinit()` - Close the sheet
 - `Reader.Sheet.nextRow()` - Move to the next row (returns true if successful)
 - `Reader.Sheet.nextCell()` - Get the next cell's content as a raw string
@@ -180,6 +183,8 @@ pub fn main() !void {
 - `Reader.Sheet.nextCellInt()` - Get the next cell's content as an integer
 - `Reader.Sheet.nextCellFloat()` - Get the next cell's content as a float
 - `Reader.Sheet.nextCellDatetime()` - Get the next cell's content as a timestamp
+- `Reader.Sheet.lastRow()` - Get the index of the last row that was retrieved
+- `Reader.Sheet.lastColumn()` - Get the index of the column of the last cell that was retrieved
 
 ### Writer
 

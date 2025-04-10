@@ -5,6 +5,13 @@ const c = @cImport({
     @cInclude("xlsxio_write.h");
 });
 
+pub const SKIP_NONE: c_uint = c.XLSXIOREAD_SKIP_NONE;
+pub const SKIP_EMPTY_ROWS: c_uint = c.XLSXIOREAD_SKIP_EMPTY_ROWS;
+pub const SKIP_EMPTY_CELLS: c_uint = c.XLSXIOREAD_SKIP_EMPTY_CELLS;
+pub const SKIP_ALL_EMPTY: c_uint = c.XLSXIOREAD_SKIP_ALL_EMPTY;
+pub const SKIP_EXTRA_CELLS: c_uint = c.XLSXIOREAD_SKIP_EXTRA_CELLS;
+pub const SKIP_HIDDEN_ROWS: c_uint = c.XLSXIOREAD_SKIP_HIDDEN_ROWS;
+
 // Custom timestamp type that matches the C library's time_t
 pub const Timestamp = struct {
     secs: i64,
@@ -63,9 +70,9 @@ pub const Reader = struct {
         handle: ?*?*c.struct_xlsxio_read_sheet_struct,
         allocator: std.mem.Allocator,
 
-        pub fn init(reader: *Reader, sheet_name: ?[:0]const u8) !Sheet {
+        pub fn init(reader: *Reader, sheet_name: ?[:0]const u8, flags: c_uint) !Sheet {
             const name_ptr = if (sheet_name) |name| name.ptr else null;
-            const handle = c.xlsxioread_sheet_open(@as(c.xlsxioreader, @ptrCast(@alignCast(reader.handle))), name_ptr, c.XLSXIOREAD_SKIP_EMPTY_ROWS) orelse return XlsxioError.SheetNotFound;
+            const handle = c.xlsxioread_sheet_open(@as(c.xlsxioreader, @ptrCast(@alignCast(reader.handle))), name_ptr, flags) orelse return XlsxioError.SheetNotFound;
             return Sheet{
                 .handle = @as(?*?*c.struct_xlsxio_read_sheet_struct, @ptrCast(@alignCast(handle))),
                 .allocator = reader.allocator,
