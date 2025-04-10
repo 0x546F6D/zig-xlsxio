@@ -44,17 +44,36 @@ pub const Reader = struct {
         c.xlsxioread_close(@as(c.xlsxioreader, @ptrCast(@alignCast(self.handle))));
     }
 
+    pub fn isSheet(self: Reader, sheet_name: [:0]const u8) !bool {
+        var sheetlist = try self.getSheetList();
+        defer sheetlist.deinit();
+        while (try sheetlist.next()) |name| {
+            defer self.allocator.free(name);
+            if (std.mem.eql(u8, sheet_name, name)) return true;
+        }
+        return false;
+    }
+
+    pub fn getSheetList(reader: Reader) !SheetList {
+        const handle = c.xlsxioread_sheetlist_open(@as(c.xlsxioreader, @ptrCast(@alignCast(reader.handle)))) orelse return XlsxioError.SheetListNotOpened;
+        return SheetList{
+            .handle = @as(?*?*c.struct_xlsxio_read_sheetlist_struct, @ptrCast(@alignCast(handle))),
+            .allocator = reader.allocator,
+        };
+    }
+
+    pub fn getSheet(reader: Reader, sheet_name: ?[:0]const u8, flags: c_uint) !Sheet {
+        const name_ptr = if (sheet_name) |name| name.ptr else null;
+        const handle = c.xlsxioread_sheet_open(@as(c.xlsxioreader, @ptrCast(@alignCast(reader.handle))), name_ptr, flags) orelse return XlsxioError.SheetNotFound;
+        return Sheet{
+            .handle = @as(?*?*c.struct_xlsxio_read_sheet_struct, @ptrCast(@alignCast(handle))),
+            .allocator = reader.allocator,
+        };
+    }
+
     pub const SheetList = struct {
         handle: ?*?*c.struct_xlsxio_read_sheetlist_struct,
         allocator: std.mem.Allocator,
-
-        pub fn init(reader: *Reader) !SheetList {
-            const handle = c.xlsxioread_sheetlist_open(@as(c.xlsxioreader, @ptrCast(@alignCast(reader.handle)))) orelse return XlsxioError.SheetListNotOpened;
-            return SheetList{
-                .handle = @as(?*?*c.struct_xlsxio_read_sheetlist_struct, @ptrCast(@alignCast(handle))),
-                .allocator = reader.allocator,
-            };
-        }
 
         pub fn deinit(self: *SheetList) void {
             c.xlsxioread_sheetlist_close(@as(c.xlsxioreadersheetlist, @ptrCast(@alignCast(self.handle))));
@@ -69,15 +88,6 @@ pub const Reader = struct {
     pub const Sheet = struct {
         handle: ?*?*c.struct_xlsxio_read_sheet_struct,
         allocator: std.mem.Allocator,
-
-        pub fn init(reader: *Reader, sheet_name: ?[:0]const u8, flags: c_uint) !Sheet {
-            const name_ptr = if (sheet_name) |name| name.ptr else null;
-            const handle = c.xlsxioread_sheet_open(@as(c.xlsxioreader, @ptrCast(@alignCast(reader.handle))), name_ptr, flags) orelse return XlsxioError.SheetNotFound;
-            return Sheet{
-                .handle = @as(?*?*c.struct_xlsxio_read_sheet_struct, @ptrCast(@alignCast(handle))),
-                .allocator = reader.allocator,
-            };
-        }
 
         pub fn deinit(self: *Sheet) void {
             c.xlsxioread_sheet_close(@as(c.xlsxioreadersheet, @ptrCast(@alignCast(self.handle))));

@@ -86,7 +86,7 @@ pub fn main() !void {
     defer reader.deinit();
     
     // Get list of sheets
-    var sheetlist = try xlsxio.Reader.SheetList.init(&reader);
+    var sheetlist = try reader.getSheetList();
     defer sheetlist.deinit();
 
     // Iterate through sheets
@@ -95,8 +95,13 @@ pub fn main() !void {
         std.debug.print("sheet_name: {s}\n", .{sheet_name});
     }
 
+    // Check if .xlsx file contains sheet
+    // xlsxio does not return null pointer if failing to open an unavailable sheet
+    const sheet_present = reader.isSheet("Sheet1");
+    std.debug.print("sheet is present: {}\n", .{sheet_present});
+
     // Open a sheet (use null for first sheet)
-    var sheet = try xlsxio.Reader.Sheet.init(&reader, "Sheet1", xlsxio.SKIP_EMPTY_ROW);
+    var sheet = try reader.getSheet("Sheet1", xlsxio.SKIP_EMPTY_ROW);
     defer sheet.deinit();
     
     // Iterate through rows
@@ -172,10 +177,10 @@ pub fn main() !void {
 
 - `Reader.init(allocator, filename)` - Open an Excel file for reading
 - `Reader.deinit()` - Close the Excel file
-- `Reader.SheetList.init(reader)` - Get the list of sheets in the Excel file
+- `Reader.getSheetList()` - Get the list of sheets in the Excel file
 - `Reader.SheetList.deinit()` - close the list of sheets
 - `Reader.SheetList.next()` - Get the name of the next sheet
-- `Reader.Sheet.init(reader, sheet_name, flags)` - Open a specific sheet (pass null for first sheet, use flags to skip rows/cells)
+- `Reader.getSheet(sheet_name, flags)` - Open a specific sheet (pass null for first sheet, use flags to skip rows/cells)
 - `Reader.Sheet.deinit()` - Close the sheet
 - `Reader.Sheet.nextRow()` - Move to the next row (returns true if successful)
 - `Reader.Sheet.nextCell()` - Get the next cell's content as a raw string
