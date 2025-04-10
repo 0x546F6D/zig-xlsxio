@@ -17,7 +17,7 @@ A Zig wrapper for [xlsxio](https://github.com/brechtsanders/xlsxio), a library f
 
 ## Libraries used
 
-- [XLSX I/O version 0.2.35](https://github.com/brechtsanders/xlsxio/releases/tag/0.2.35) for both dynamic.dll and static.a libraries
+- [XLSX I/O version 0.2.35](https://github.com/brechtsanders/xlsxio/releases/tag/0.2.35) for both shared.dll and static.a libraries
 - [mingw-w64-x86_64-expat 2.7.1](https://packages.msys2.org/packages/mingw-w64-x86_64-expat) for libexpat.a
 - [mingw-w64-x86_64-minizip 1.3.1](https://packages.msys2.org/packages/mingw-w64-x86_64-minizip) for libminizip.a
 - [mingw-w64-x86_64-zlib 1.3.1](https://packages.msys2.org/packages/mingw-w64-x86_64-zlib) for libz.a
@@ -58,12 +58,12 @@ pub fn build(b: *std.Build) void {
     });
 
     exe.root_module.addImport("xlsxio", xlsxio_dep.module("xlsxio"));
-    // Copy xlsxio dlls to bin directory
+    // Copy xlsxio dlls to bin directory if dynamic linking
     @import("xlsxio").copyXlsxioDlls(b, xlsxio_dep);
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
-    // Add xlsxio dlls directory to the run command
+    // Add xlsxio dlls directory to the run command if dynamic linking
     @import("xlsxio").addRunPath(b, xlsxio_dep, run_cmd);
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
