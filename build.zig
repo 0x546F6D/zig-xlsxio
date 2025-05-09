@@ -4,12 +4,12 @@ const include_spath = "vendor/include";
 const lib_spath = "vendor/lib";
 const bin_spath = "vendor/bin";
 
-const xlsxio_dlls = [_][]const u8{
+const xlsxio_lib = [_][]const u8{
     "libxlsxio_read",
     "libxlsxio_write",
 };
 
-const static_dep_dlls = [_][]const u8{
+const static_dep_lib = [_][]const u8{
     lib_spath ++ "/libexpat.a",
     lib_spath ++ "/libminizip.a",
     lib_spath ++ "/libz.a",
@@ -40,18 +40,18 @@ pub fn build(b: *std.Build) void {
     if (link_static) {
         // add static libraries
         if (read_only)
-            xlsxio_mod.addObjectFile(b.path(lib_spath ++ "/" ++ xlsxio_dlls[0] ++ ".a"))
-        else inline for (xlsxio_dlls) |dll_name|
+            xlsxio_mod.addObjectFile(b.path(lib_spath ++ "/" ++ xlsxio_lib[0] ++ ".a"))
+        else inline for (xlsxio_lib) |dll_name|
             xlsxio_mod.addObjectFile(b.path(lib_spath ++ "/" ++ dll_name ++ ".a"));
         // add dependencies static libs
-        inline for (static_dep_dlls) |dll_path|
+        inline for (static_dep_lib) |dll_path|
             xlsxio_mod.addObjectFile(b.path(dll_path));
     } else {
         // add import library, link to dynamic library
         if (read_only) {
-            xlsxio_mod.addObjectFile(b.path(lib_spath ++ "/" ++ xlsxio_dlls[0] ++ ".dll.a"));
-            xlsxio_mod.linkSystemLibrary(xlsxio_dlls[0], .{});
-        } else inline for (xlsxio_dlls) |dll_name| {
+            xlsxio_mod.addObjectFile(b.path(lib_spath ++ "/" ++ xlsxio_lib[0] ++ ".dll.a"));
+            xlsxio_mod.linkSystemLibrary(xlsxio_lib[0], .{});
+        } else inline for (xlsxio_lib) |dll_name| {
             xlsxio_mod.addObjectFile(b.path(lib_spath ++ "/" ++ dll_name ++ ".dll.a"));
             xlsxio_mod.linkSystemLibrary(dll_name, .{});
         }
@@ -76,9 +76,9 @@ pub fn copyXlsxioDlls(
 
     // copy dynamic dlls to build zig-out/bin directory
     if (user_read_only) {
-        const dll_file = std.mem.concat(b.allocator, u8, &.{ xlsxio_dlls[0], ".dll" }) catch xlsxio_dlls[0];
+        const dll_file = std.mem.concat(b.allocator, u8, &.{ xlsxio_lib[0], ".dll" }) catch xlsxio_lib[0];
         b.installBinFile(b.pathJoin(&.{ xlsxio_lib_path, dll_file }), dll_file);
-    } else for (xlsxio_dlls) |dll_name| {
+    } else for (xlsxio_lib) |dll_name| {
         const dll_file = std.mem.concat(b.allocator, u8, &.{ dll_name, ".dll" }) catch dll_name;
         b.installBinFile(b.pathJoin(&.{ xlsxio_lib_path, dll_file }), dll_file);
     }

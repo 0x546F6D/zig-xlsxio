@@ -62,15 +62,6 @@ pub const Reader = struct {
         };
     }
 
-    pub fn getSheet(reader: Reader, sheet_name: ?[:0]const u8, flags: c_uint) !Sheet {
-        const name_ptr = if (sheet_name) |name| name.ptr else null;
-        const handle = c.xlsxioread_sheet_open(@as(c.xlsxioreader, @ptrCast(@alignCast(reader.handle))), name_ptr, flags) orelse return XlsxioError.SheetNotFound;
-        return Sheet{
-            .handle = @as(?*?*c.struct_xlsxio_read_sheet_struct, @ptrCast(@alignCast(handle))),
-            .allocator = reader.allocator,
-        };
-    }
-
     pub const SheetList = struct {
         handle: ?*?*c.struct_xlsxio_read_sheetlist_struct,
         allocator: std.mem.Allocator,
@@ -84,6 +75,15 @@ pub const Reader = struct {
             return try std.mem.Allocator.dupeZ(self.allocator, u8, std.mem.span(value));
         }
     };
+
+    pub fn getSheet(reader: Reader, sheet_name: ?[:0]const u8, flags: c_uint) !Sheet {
+        const name_ptr = if (sheet_name) |name| name.ptr else null;
+        const handle = c.xlsxioread_sheet_open(@as(c.xlsxioreader, @ptrCast(@alignCast(reader.handle))), name_ptr, flags) orelse return XlsxioError.SheetNotFound;
+        return Sheet{
+            .handle = @as(?*?*c.struct_xlsxio_read_sheet_struct, @ptrCast(@alignCast(handle))),
+            .allocator = reader.allocator,
+        };
+    }
 
     pub const Sheet = struct {
         handle: ?*?*c.struct_xlsxio_read_sheet_struct,

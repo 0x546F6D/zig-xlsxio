@@ -96,7 +96,7 @@ pub fn main() !void {
     }
 
     // Check if .xlsx file contains sheet
-    // xlsxio does not return null pointer if failing to open an unavailable sheet
+    // xlsxio does not return a null pointer if failing to open an unavailable sheet
     const sheet_present = reader.isSheet("Sheet1");
     std.debug.print("sheet is present: {}\n", .{sheet_present});
 
