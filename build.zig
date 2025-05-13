@@ -33,6 +33,17 @@ pub fn build(b: *std.Build) void {
     });
     // Add include path for @cImport
     xlsxio_mod.addIncludePath(b.path(include_spath));
+
+    // Add C api module
+    const xlsxio_api = b.addTranslateC(.{
+        .root_source_file = b.path("include/c.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    xlsxio_api.addIncludePath(b.path(include_spath));
+    xlsxio_mod.addImport("xlsxio_c", xlsxio_api.createModule());
+
     // Add dlls path if necessary
     if (!link_static) xlsxio_mod.addLibraryPath(b.path(bin_spath));
 

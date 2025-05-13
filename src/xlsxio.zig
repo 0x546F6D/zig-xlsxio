@@ -1,9 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("xlsxio_read.h");
-    @cInclude("xlsxio_write.h");
-});
+const c = @import("xlsxio_c");
 
 pub const SKIP_NONE: c_uint = c.XLSXIOREAD_SKIP_NONE;
 pub const SKIP_EMPTY_ROWS: c_uint = c.XLSXIOREAD_SKIP_EMPTY_ROWS;
